@@ -75,11 +75,12 @@ void DrawParticles() {
     
 }
 
-int player_score = 0; int player_animation = 0;
-int cpu_score = 0; int cpu_animation = 0;
-bool game_started = false; bool game_over = false; bool paused = false;
+// =========Global Variables===============// 
+int player_score = 0, player_animation = 0, cpu_score = 0, cpu_animation = 0;
+bool game_started = false, game_over = false, paused = false;
 string winner = "";
-float start_alpha = 0.0f, win_alpha = 0.0f;
+float start_alpha = 0.0f, win_alpha = 0.0f, time_passed = 0.0f, ballSpeed_Multiplier = 1.0f, final_update_time = 0.0f;
+const float speed_increament = 0.2f, max_ballSpeed_Multiplier = 2.0f;
 Sound BallHit, Cpu_Scores, Cpu_Wins, Player_Scores, Game_Start, Player_Wins;
 
 class Ball{
@@ -95,8 +96,8 @@ class Ball{
     void update(){
         if (game_over) return;
         
-        x += speed_x;
-        y += speed_y;
+        x += speed_x * ballSpeed_Multiplier;
+        y += speed_y * ballSpeed_Multiplier;
 
         if (y + radius >= GetScreenHeight() || y - radius <= 0)
         {
@@ -107,7 +108,7 @@ class Ball{
             cpu_score++;
             cpu_animation = 15;
             PlaySound(Cpu_Scores);
-            if (cpu_score >= 25)
+            if (cpu_score >= 7)
             {
                 game_over = true;
                 winner = "CPU";
@@ -120,7 +121,7 @@ class Ball{
             player_score++;
             player_animation = 15;
             PlaySound(Player_Scores);
-            if (player_score >= 25)
+            if (player_score >= 7)
             {
                 game_over = true;
                 winner = "Player";
@@ -215,7 +216,7 @@ int main()
 
     cpu.width = 25; cpu.height = 120;
     cpu.x = 50; cpu.y = screen_height/2 - cpu.height/2;
-    cpu.speed = 6;
+    cpu.speed = 7;
 
     
     InitWindow(screen_width, screen_height, "Pong");
@@ -256,6 +257,16 @@ int main()
                 player.Update();
                 cpu.Update(ball.y);
 
+                time_passed += GetFrameTime();
+
+                // Ball Speed Increase
+                if (time_passed - final_update_time >= 30.0f)
+                {
+                    final_update_time = time_passed;
+                    ballSpeed_Multiplier += speed_increament;
+                    if (ballSpeed_Multiplier > max_ballSpeed_Multiplier) ballSpeed_Multiplier = max_ballSpeed_Multiplier;
+                }
+
                 //Collison Check
                 if (CheckCollisionCircleRec(Vector2{ball.x, ball.y}, ball.radius, Rectangle{player.x, player.y, player.width, player.height}))
                 {
@@ -280,7 +291,7 @@ int main()
             {
                 player_score = 0; cpu_score = 0; game_over = false; winner = ""; ball.ResetBall();
                 game_started = false;
-                start_alpha = 0.0f;
+                start_alpha = 0.0f; time_passed = 0.0f; ballSpeed_Multiplier = 1.0f; final_update_time = 0.0f;
             }
         }
         // Scoreboard Animation#1
@@ -303,6 +314,8 @@ int main()
 
         //Drawing
         ClearBackground(BLACK);
+
+        
         BeginDrawing();
         if (!game_started)
         {
@@ -323,6 +336,12 @@ int main()
             player.Draw();
             DrawParticles();
 
+            // Timer
+            int minutes = (int) (time_passed /60);
+            int seconds = (int) (time_passed) % 60;
+            string timer = TextFormat("%02i:%02i", minutes, seconds);
+            DrawText(timer.c_str(), screen_width/2 - MeasureText(timer.c_str(), 40)/2, 10, 40, WHITE );
+
             // Scoreboard Animation#2
             int cpu_font_size = (cpu_animation > 0) ? 120 : 80;
             Color cpu_color = (cpu_animation > 0) ? BLUE : WHITE;
@@ -342,7 +361,6 @@ int main()
             }
             else
             {
-                DrawText("First to 25 wins!", screen_width/2 - MeasureText("First to 25 wins!", 40)/2, screen_height - 60, 40, RED);
                 if (paused)
                 {
                     DrawText("PAUSED", screen_width/2 - MeasureText("PAUSED", 80)/2, screen_height/2 - 40, 80, BLUE);

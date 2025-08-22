@@ -26,16 +26,12 @@ A simple 2D Pong game made using **C++** and **Raylib**. This is my first game p
   - Move up: `W` or `Up Arrow`  
   - Move down: `S` or `Down Arrow`  
 - **Pause/Resume:** `P` or `Escape`  
-- **Start/Restart Game:** `Space`
-
-
- **Suggest what should i add next**
-
+- **Start/Restart Game:** `Space`  
 
 ---
 
 ## Screenshots
 
-![Start Screen](Screenshots/start.png)  
-![Gameplay](Screenshots/gameplay.png)  
-![Win Screen](Screenshots/win.png)  
+![Start Screen](screenshots/start.png)  
+![Gameplay](screenshots/gameplay.png)  
+![Win Screen](screenshots/win.png)  
