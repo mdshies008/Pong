@@ -9,8 +9,7 @@ A simple 2D Pong game made using **C++** and **Raylib**. This is my first game p
 - **Player vs CPU**  
 - Ball movement with realistic collision detection  (I tried to be but i'm stil learning math)
 - Particle effects and trails when the ball hits paddles  (i will admit i asked my bro for help here.)
-- Score tracking and win conditions (first to 7)
-- Timer to track time.
+- Score tracking and win conditions (first to 25)  
 - Start screen and win screen with fade animations  
 - Pause/resume functionality  (i tried using the trick from Godot worked kinda same i mean same logic)
 - Sound effects for:  
@@ -33,6 +32,6 @@ A simple 2D Pong game made using **C++** and **Raylib**. This is my first game p
 
 ## Screenshots
 
-![Start Screen](Screenshots/start.png)  
-![Gameplay](Screenshots/gameplay.png)  
-![Win Screen](Screenshots/win.png)  
+![Start Screen](screenshots/start.png)  
+![Gameplay](screenshots/gameplay.png)  
+![Win Screen](screenshots/win.png)  
