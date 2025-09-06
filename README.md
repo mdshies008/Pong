@@ -35,4 +35,4 @@ A simple 2D Pong game made using **C++** and **Raylib**. This is my first game p
 ![Start Screen](Screenshots/start.png)  
 ![Gameplay](Screenshots/gameplay.png)  
 ![Win Screen](Screenshots/win.png)  
-![Stats Screen](Screenshots/basic_stats_page.png)
+![Settings Screen](Screenshots/settings.png)
