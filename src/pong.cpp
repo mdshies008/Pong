@@ -3,6 +3,7 @@
 #include <fstream>
 #include <raylib.h>
 #include <cmath>
+#include <algorithm>
 
 using namespace std;
 
@@ -76,13 +77,24 @@ void DrawParticles() {
     
 }
 
-// =========Global Variables===============// 
+//=========Global Variables===============// 
 int player_score = 0, player_animation = 0, cpu_score = 0, cpu_animation = 0, player_wins = 0, cpu_wins = 0;
 bool game_started = false, game_over = false, paused = false;
 string winner = "";
 float start_alpha = 0.0f, win_alpha = 0.0f, time_passed = 0.0f, ballSpeed_Multiplier = 1.0f, final_update_time = 0.0f;
 const float speed_increment = 0.2f, max_ballSpeed_Multiplier = 2.0f;
 Sound BallHit, Cpu_Scores, Cpu_Wins, Player_Scores, Game_Start, Player_Wins;
+
+//===========Game States==============//
+enum GameState {MENU, GAME, SETTINGS};
+GameState current_state = MENU;
+
+//===========Settings Variables==============//
+float master_volume = 1.0f; // Volume range from 0.0 to 1.0
+int selected_option = 0; // 0 = volume
+int menu_selected = 0; // 0 = start game, 1 = settings, 2 = exit
+int pause_selected = 0; // 0 = resume, 1 = to menu, 2 = exit 
+
 
 void SaveStats(){
     ofstream file("Stats.txt");
@@ -102,10 +114,6 @@ void loadStats() {
         file.close();
     }
 }
-
-//===========Game States==============//
-enum GameState {MENU, GAME, STATS};
-GameState current_state = MENU;
 
 class Ball{
     public:
@@ -229,8 +237,6 @@ CpuPaddle cpu;
 
 int main() 
 {
-    cout << "Pong" << endl;
-
     const int screen_height = 800;
     const int screen_width = 1280;
 
@@ -261,7 +267,8 @@ int main()
     // Load Stats 
     loadStats();
 
-    while(!WindowShouldClose()){
+    while(!WindowShouldClose())
+    {
         //Pause/Resume 
         if (current_state == GAME && game_started && !game_over && (IsKeyPressed(KEY_ESCAPE)))
         {
@@ -271,16 +278,47 @@ int main()
         //Update
         if (current_state == MENU)
         {
-            if (IsKeyPressed(KEY_SPACE))
+            if (IsKeyPressed(KEY_UP))
             {
-                current_state = GAME;
-                game_started = true;
-                PlaySound(Game_Start);
+                menu_selected--;
+                if (menu_selected < 0) menu_selected = 2; // wraping
             }
-            if (IsKeyPressed(KEY_S))
+            if (IsKeyPressed(KEY_DOWN))
             {
-                current_state = STATS;
+                menu_selected++;
+                if (menu_selected > 2) menu_selected = 0; // wraping
             }
+            if (IsKeyPressed(KEY_ENTER))
+            {
+                if (menu_selected == 0) // Start Game
+                {
+                    current_state = GAME;
+                    game_started = true; paused = false;
+                    PlaySound(Game_Start);
+                }
+                else if (menu_selected == 1) // Settings
+                {
+                    current_state = SETTINGS;
+                }
+                else if (menu_selected == 2) // Exit
+                {
+                    break;
+                }
+                
+            }
+            
+            if (start_alpha < 1.0f) start_alpha = min(1.0f, start_alpha + 0.03f);
+
+            Color fade_white = Fade(WHITE, start_alpha), fade_blue = Fade(BLUE, start_alpha);
+
+            DrawText("PONG", screen_width/2 - MeasureText("PONG", 80)/2, 80, 80, fade_blue);
+
+            Color start_color = (menu_selected == 0) ? RED : fade_white, settings_color = (menu_selected == 1) ? RED : fade_white, exit_color = (menu_selected == 2) ? RED : fade_white;
+
+            DrawText("Start Game", screen_width/2 - MeasureText("Start Game", 40)/2, screen_height/2 - 20, 40, start_color);
+            DrawText("Settings", screen_width/2 - MeasureText("Settings", 40)/2, screen_height/2 + 40, 40, settings_color);
+            DrawText("Exit", screen_width/2 - MeasureText("Exit", 40)/2, screen_height/2 + 100, 40, exit_color);
+            
         }
         else if (current_state == GAME)
         {
@@ -320,24 +358,71 @@ int main()
                     }
                     UpdateParticles();
                 }
+                else
+                {
+                    if (IsKeyPressed(KEY_UP))
+                    {
+                        pause_selected--;
+                        if (pause_selected < 0) pause_selected = 2; // wraping
+                    }
+                    if (IsKeyPressed(KEY_DOWN))
+                    {
+                        pause_selected++;
+                        if (pause_selected > 2) pause_selected = 0; // wraping
+                    }
+                    if (IsKeyPressed(KEY_ENTER))
+                    {
+                        if (pause_selected == 0) // Resume
+                        {
+                            paused = false;
+                        }
+                        else if (pause_selected == 1) // To Menu
+                        {
+                            paused = false; game_started = false;
+                            current_state = MENU;
+                            start_alpha = 0.0f; time_passed = 0.0f; ballSpeed_Multiplier = 1.0f; final_update_time = 0.0f;
+                            player_score = 0; cpu_score = 0; game_over = false; winner = ""; ball.ResetBall();
+                        }
+                        else if (pause_selected == 2) // Exit
+                        {
+                            break;
+                        }
+                        
+                    }
+                }
             }
             else
             {
                 if (IsKeyPressed(KEY_SPACE))
                 {
-                player_score = 0; cpu_score = 0; game_over = false; winner = ""; ball.ResetBall();
-                game_started = false; current_state = MENU;
-                start_alpha = 0.0f; time_passed = 0.0f; ballSpeed_Multiplier = 1.0f; final_update_time = 0.0f;
+                    player_score = 0; cpu_score = 0; game_over = false; winner = ""; ball.ResetBall();
+                    game_started = false; current_state = MENU;
+                    start_alpha = 0.0f; time_passed = 0.0f; ballSpeed_Multiplier = 1.0f; final_update_time = 0.0f;
                 }
             }
         }
-        else if (current_state == STATS)
+        else if (current_state == SETTINGS)
         {
             if (IsKeyPressed(KEY_ESCAPE))
             {
                 current_state = MENU;
             }
-            
+            // Change volume
+            if (selected_option == 0)
+            {
+                if (IsKeyPressed(KEY_LEFT))
+                {
+                    master_volume -= 0.1f;
+                    if (master_volume < 0.0f) master_volume = 0.0f;
+                    SetMasterVolume(master_volume);
+                }
+                if (IsKeyPressed(KEY_RIGHT))
+                {
+                    master_volume += 0.1f;
+                    if (master_volume > 1.0f) master_volume = 1.0f;
+                    SetMasterVolume(master_volume);
+                }
+            }
         }
 
         // Scoreboard Animation#1
@@ -361,17 +446,8 @@ int main()
         //Drawing
         BeginDrawing();
         ClearBackground(BLACK);
-    
-        if (current_state == MENU)
-        {
-            Color fade_white = Fade(WHITE, start_alpha);
-            Color fade_blue = Fade(BLUE, start_alpha);
 
-            DrawText("PONG", screen_width/2 - MeasureText("PONG", 80)/2, 80, 80, fade_blue);
-            DrawText("Press SPACE to Start", screen_width/2 - MeasureText("Press SPACE to Start", 40)/2, screen_height/2 - 20, 40, fade_white);
-            DrawText("Press S to View Stats", screen_width/2 - MeasureText("Press S to View Stats", 30)/2, screen_height/2 + 40, 30, fade_white);
-        }
-        else if(current_state == GAME)
+        if(current_state == GAME)
         {
             DrawLine(screen_width/2, 0, screen_width/2, screen_height, WHITE);
             for (double r = 148; r <= 152; r += 0.2) 
@@ -398,28 +474,40 @@ int main()
             Color player_color = (player_animation > 0) ? RED : WHITE;
             DrawText(TextFormat("%i", player_score), 3 * screen_width/4 - 20, 20, player_font_size, player_color);
 
+            if (paused)
+            {
+                DrawRectangle(0, 0, screen_width, screen_height, Fade(BLACK, 0.6f));
+
+                const char* pause_options[3] = {"Resume", "To Menu", "Exit"};
+                for (int i = 0; i < 3; i++)
+                {
+                    Color option_color = (pause_selected == i) ? RED : WHITE;
+                    DrawText(pause_options[i], screen_width/2 - MeasureText(pause_options[i], 50)/2, screen_height/2 + i * 60 - 40, 50, option_color);
+                }
+            }
+        
             if (game_over)
             {
-                Color fade_green = Fade(GREEN, win_alpha);
-                Color fade_white = Fade(WHITE, win_alpha);
+                Color fade_green = Fade(GREEN, win_alpha), fade_white = Fade(WHITE, win_alpha);
 
                 DrawText(TextFormat("%s WON!", winner.c_str()), screen_width/2 - 200, screen_height/2 - 40, 80, fade_green);
                 DrawText("Press SPACE to restart", screen_width/2 - 200, screen_height/2 + 60, 40, fade_white);
             }
-            else
-            {
-                if (paused)
-                {
-                    DrawText("PAUSED", screen_width/2 - MeasureText("PAUSED", 80)/2, screen_height/2 - 40, 80, BLUE);
-                }
-            }
         }
-        else if (current_state == STATS)
+        else if (current_state == SETTINGS)
         {
-            DrawText("=== STATS ===", screen_width/2 - MeasureText("=== STATS ===", 50)/2, 100, 50, WHITE);
-            DrawText(TextFormat("Player Wins: %i", player_wins), screen_width/2 - 150, 200, 40, BLUE);
-            DrawText(TextFormat("CPU Wins: %i", cpu_wins), screen_width/2 - 150, 260, 40, RED);
-            // DrawText("Press ESC to return", screen_width/2 - 100, 400, 30, WHITE);
+            DrawText("---SETTINGS---", GetScreenWidth()/2 - MeasureText("---SETTINGS---", 50)/2, 100, 50, WHITE);
+
+            int bar_width = 400, bar_height = 30, bar_x = GetScreenWidth()/2 - bar_width/2, bar_y = 250;
+
+            DrawRectangle(bar_x, bar_y, bar_width, bar_height, GRAY);
+
+            DrawRectangle(bar_x, bar_y, (int)(bar_width * master_volume), bar_height, RED);
+            
+            // Volume
+            Color vol_color = RED;
+            DrawText(TextFormat("Volume: %i%%", (int)(master_volume * 100)),
+                GetScreenWidth()/2 - 200, 200, 40, vol_color);  // moved up to replace resolution's y-position
         }
         EndDrawing();
     }

@@ -1,7 +1,9 @@
 #include <vector>
 #include <iostream>
+#include <fstream>
 #include <raylib.h>
 #include <cmath>
+#include <algorithm>
 
 using namespace std;
 
@@ -75,12 +77,43 @@ void DrawParticles() {
     
 }
 
-int player_score = 0; int player_animation = 0;
-int cpu_score = 0; int cpu_animation = 0;
-bool game_started = false; bool game_over = false; bool paused = false;
+//=========Global Variables===============// 
+int player_score = 0, player_animation = 0, cpu_score = 0, cpu_animation = 0, player_wins = 0, cpu_wins = 0;
+bool game_started = false, game_over = false, paused = false;
 string winner = "";
-float start_alpha = 0.0f, win_alpha = 0.0f;
+float start_alpha = 0.0f, win_alpha = 0.0f, time_passed = 0.0f, ballSpeed_Multiplier = 1.0f, final_update_time = 0.0f;
+const float speed_increment = 0.2f, max_ballSpeed_Multiplier = 2.0f;
 Sound BallHit, Cpu_Scores, Cpu_Wins, Player_Scores, Game_Start, Player_Wins;
+
+//===========Game States==============//
+enum GameState {MENU, GAME, SETTINGS};
+GameState current_state = MENU;
+
+//===========Settings Variables==============//
+float master_volume = 1.0f; // Volume range from 0.0 to 1.0
+int selected_option = 0; // 0 = volume
+int menu_selected = 0; // 0 = start game, 1 = settings, 2 = exit
+int pause_selected = 0; // 0 = resume, 1 = to menu, 2 = exit 
+
+
+void SaveStats(){
+    ofstream file("Stats.txt");
+    if (file.is_open())
+    {
+        file << player_wins << endl;
+        file << cpu_wins << endl;
+        file.close();
+    }
+}
+void loadStats() {
+    ifstream file("Stats.txt");
+    if (file.is_open())
+    {
+        file >> player_wins;
+        file >> cpu_wins;
+        file.close();
+    }
+}
 
 class Ball{
     public:
@@ -95,8 +128,8 @@ class Ball{
     void update(){
         if (game_over) return;
         
-        x += speed_x;
-        y += speed_y;
+        x += speed_x * ballSpeed_Multiplier;
+        y += speed_y * ballSpeed_Multiplier;
 
         if (y + radius >= GetScreenHeight() || y - radius <= 0)
         {
@@ -107,11 +140,12 @@ class Ball{
             cpu_score++;
             cpu_animation = 15;
             PlaySound(Cpu_Scores);
-            if (cpu_score >= 25)
+            if (cpu_score >= 7)
             {
                 game_over = true;
                 winner = "CPU";
                 PlaySound(Cpu_Wins);
+                cpu_wins++; SaveStats();
             }
             ResetBall();
         }
@@ -120,11 +154,12 @@ class Ball{
             player_score++;
             player_animation = 15;
             PlaySound(Player_Scores);
-            if (player_score >= 25)
+            if (player_score >= 7)
             {
                 game_over = true;
                 winner = "Player";
                 PlaySound(Player_Wins);
+                player_wins++; SaveStats();
             }
             ResetBall();
         }        
@@ -135,8 +170,8 @@ class Ball{
         y = GetScreenHeight()/2;
 
         int speed_choices[2] = {-1, 1};
-        speed_x = abs(speed_x) * speed_choices[GetRandomValue(0,1)];
-        speed_y = abs(speed_y) * speed_choices[GetRandomValue(0,1)];
+        speed_x = 7 * speed_choices[GetRandomValue(0,1)];
+        speed_y = 7 * speed_choices[GetRandomValue(0,1)];
     }
 };
 
@@ -202,8 +237,6 @@ CpuPaddle cpu;
 
 int main() 
 {
-    cout << "Pong" << endl;
-
     const int screen_height = 800;
     const int screen_width = 1280;
 
@@ -215,7 +248,7 @@ int main()
 
     cpu.width = 25; cpu.height = 120;
     cpu.x = 50; cpu.y = screen_height/2 - cpu.height/2;
-    cpu.speed = 6;
+    cpu.speed = 7;
 
     
     InitWindow(screen_width, screen_height, "Pong");
@@ -231,64 +264,173 @@ int main()
     Game_Start  = LoadSound("Audio/GameStart.mp3");
     Player_Wins  = LoadSound("Audio/PlayerWins.mp3");
 
-    while(!WindowShouldClose()){
+    // Load Stats 
+    loadStats();
+
+    while(!WindowShouldClose())
+    {
         //Pause/Resume 
-        if (game_started && !game_over && (IsKeyPressed(KEY_P) || IsKeyPressed(KEY_ESCAPE))) {
+        if (current_state == GAME && game_started && !game_over && (IsKeyPressed(KEY_ESCAPE)))
+        {
             paused = !paused;
         }
-
+        
         //Update
-        if (!game_started)
+        if (current_state == MENU)
         {
-            if (IsKeyPressed(KEY_SPACE))
+            if (IsKeyPressed(KEY_UP))
             {
-                game_started = true;
-                PlaySound(Game_Start);
+                menu_selected--;
+                if (menu_selected < 0) menu_selected = 2; // wraping
+            }
+            if (IsKeyPressed(KEY_DOWN))
+            {
+                menu_selected++;
+                if (menu_selected > 2) menu_selected = 0; // wraping
+            }
+            if (IsKeyPressed(KEY_ENTER))
+            {
+                if (menu_selected == 0) // Start Game
+                {
+                    current_state = GAME;
+                    game_started = true; paused = false;
+                    PlaySound(Game_Start);
+                }
+                else if (menu_selected == 1) // Settings
+                {
+                    current_state = SETTINGS;
+                }
+                else if (menu_selected == 2) // Exit
+                {
+                    break;
+                }
+                
             }
             
-        }
-        else if (!game_over)
-        {
-            if (!paused)
-            {
-                ball.update();
-                SpawnBallTrail(ball.x, ball.y, ball.radius);
-                player.Update();
-                cpu.Update(ball.y);
+            if (start_alpha < 1.0f) start_alpha = min(1.0f, start_alpha + 0.03f);
 
-                //Collison Check
-                if (CheckCollisionCircleRec(Vector2{ball.x, ball.y}, ball.radius, Rectangle{player.x, player.y, player.width, player.height}))
-                {
-                    ball.speed_x *= -1;
-                    player.flicker_timer = 10;
-                    SpawnParticles(ball.x, ball.y, RED);
-                    PlaySound(BallHit);
-                }
-                if (CheckCollisionCircleRec(Vector2{ball.x, ball.y}, ball.radius, Rectangle{cpu.x, cpu.y, cpu.width, cpu.height}))
-                {   
-                    ball.speed_x *= -1;
-                    cpu.flicker_timer = 10;
-                    SpawnParticles(ball.x, ball.y, BLUE);
-                    PlaySound(BallHit);
-                }
-                UpdateParticles();
-            }
+            Color fade_white = Fade(WHITE, start_alpha), fade_blue = Fade(BLUE, start_alpha);
+
+            DrawText("PONG", screen_width/2 - MeasureText("PONG", 80)/2, 80, 80, fade_blue);
+
+            Color start_color = (menu_selected == 0) ? RED : fade_white, settings_color = (menu_selected == 1) ? RED : fade_white, exit_color = (menu_selected == 2) ? RED : fade_white;
+
+            DrawText("Start Game", screen_width/2 - MeasureText("Start Game", 40)/2, screen_height/2 - 20, 40, start_color);
+            DrawText("Settings", screen_width/2 - MeasureText("Settings", 40)/2, screen_height/2 + 40, 40, settings_color);
+            DrawText("Exit", screen_width/2 - MeasureText("Exit", 40)/2, screen_height/2 + 100, 40, exit_color);
+            
         }
-        else
+        else if (current_state == GAME)
         {
-            if (IsKeyPressed(KEY_SPACE))
+            if (!game_over)
             {
-                player_score = 0; cpu_score = 0; game_over = false; winner = ""; ball.ResetBall();
-                game_started = false;
-                start_alpha = 0.0f;
+                if (!paused)
+                {
+                    ball.update();
+                    SpawnBallTrail(ball.x, ball.y, ball.radius);
+                    player.Update();
+                    cpu.Update(ball.y);
+
+                    time_passed += GetFrameTime();
+
+                    // Ball Speed Increase
+                    if (time_passed - final_update_time >= 30.0f)
+                    {
+                        final_update_time = time_passed;
+                        ballSpeed_Multiplier += speed_increment;
+                        if (ballSpeed_Multiplier > max_ballSpeed_Multiplier) ballSpeed_Multiplier = max_ballSpeed_Multiplier;
+                    }
+
+                    //Collison Check
+                    if (CheckCollisionCircleRec(Vector2{ball.x, ball.y}, ball.radius, Rectangle{player.x, player.y, player.width, player.height}))
+                    {
+                        ball.speed_x *= -1;
+                        player.flicker_timer = 10;
+                        SpawnParticles(ball.x, ball.y, RED);
+                        PlaySound(BallHit);
+                    }
+                    if (CheckCollisionCircleRec(Vector2{ball.x, ball.y}, ball.radius, Rectangle{cpu.x, cpu.y, cpu.width, cpu.height}))
+                    {   
+                        ball.speed_x *= -1;
+                        cpu.flicker_timer = 10;
+                        SpawnParticles(ball.x, ball.y, BLUE);
+                        PlaySound(BallHit);
+                    }
+                    UpdateParticles();
+                }
+                else
+                {
+                    if (IsKeyPressed(KEY_UP))
+                    {
+                        pause_selected--;
+                        if (pause_selected < 0) pause_selected = 2; // wraping
+                    }
+                    if (IsKeyPressed(KEY_DOWN))
+                    {
+                        pause_selected++;
+                        if (pause_selected > 2) pause_selected = 0; // wraping
+                    }
+                    if (IsKeyPressed(KEY_ENTER))
+                    {
+                        if (pause_selected == 0) // Resume
+                        {
+                            paused = false;
+                        }
+                        else if (pause_selected == 1) // To Menu
+                        {
+                            paused = false; game_started = false;
+                            current_state = MENU;
+                            start_alpha = 0.0f; time_passed = 0.0f; ballSpeed_Multiplier = 1.0f; final_update_time = 0.0f;
+                            player_score = 0; cpu_score = 0; game_over = false; winner = ""; ball.ResetBall();
+                        }
+                        else if (pause_selected == 2) // Exit
+                        {
+                            break;
+                        }
+                        
+                    }
+                }
+            }
+            else
+            {
+                if (IsKeyPressed(KEY_SPACE))
+                {
+                    player_score = 0; cpu_score = 0; game_over = false; winner = ""; ball.ResetBall();
+                    game_started = false; current_state = MENU;
+                    start_alpha = 0.0f; time_passed = 0.0f; ballSpeed_Multiplier = 1.0f; final_update_time = 0.0f;
+                }
             }
         }
+        else if (current_state == SETTINGS)
+        {
+            if (IsKeyPressed(KEY_ESCAPE))
+            {
+                current_state = MENU;
+            }
+            // Change volume
+            if (selected_option == 0)
+            {
+                if (IsKeyPressed(KEY_LEFT))
+                {
+                    master_volume -= 0.1f;
+                    if (master_volume < 0.0f) master_volume = 0.0f;
+                    SetMasterVolume(master_volume);
+                }
+                if (IsKeyPressed(KEY_RIGHT))
+                {
+                    master_volume += 0.1f;
+                    if (master_volume > 1.0f) master_volume = 1.0f;
+                    SetMasterVolume(master_volume);
+                }
+            }
+        }
+
         // Scoreboard Animation#1
         if (player_animation > 0) player_animation--;
         if (cpu_animation > 0) cpu_animation--;
 
         // Animate start and win screens
-        if (!game_started)
+        if (current_state == MENU)
         {
             if (start_alpha < 1.0f) start_alpha = min(1.0f, start_alpha + 0.03f);
         }
@@ -302,17 +444,11 @@ int main()
         }
 
         //Drawing
-        ClearBackground(BLACK);
         BeginDrawing();
-        if (!game_started)
-        {
-            Color fade_white = Fade(WHITE, start_alpha);
-            Color fade_blue = Fade(BLUE, start_alpha);
+        ClearBackground(BLACK);
 
-            DrawText("PONG", screen_width/2 - MeasureText("PONG", 80)/2, 80, 80, fade_blue);
-            DrawText("Press SPACE to Start", screen_width/2 - MeasureText("Press SPACE to Start", 40)/2, screen_height/2 - 20, 40, fade_white);
-        }
-        else{
+        if(current_state == GAME)
+        {
             DrawLine(screen_width/2, 0, screen_width/2, screen_height, WHITE);
             for (double r = 148; r <= 152; r += 0.2) 
             {
@@ -323,6 +459,12 @@ int main()
             player.Draw();
             DrawParticles();
 
+            // Timer
+            int minutes = (int) (time_passed /60);
+            int seconds = (int) (time_passed) % 60;
+            string timer = TextFormat("%02i:%02i", minutes, seconds);
+            DrawText(timer.c_str(), screen_width/2 - MeasureText(timer.c_str(), 40)/2, 10, 40, WHITE );
+
             // Scoreboard Animation#2
             int cpu_font_size = (cpu_animation > 0) ? 120 : 80;
             Color cpu_color = (cpu_animation > 0) ? BLUE : WHITE;
@@ -332,23 +474,40 @@ int main()
             Color player_color = (player_animation > 0) ? RED : WHITE;
             DrawText(TextFormat("%i", player_score), 3 * screen_width/4 - 20, 20, player_font_size, player_color);
 
+            if (paused)
+            {
+                DrawRectangle(0, 0, screen_width, screen_height, Fade(BLACK, 0.6f));
+
+                const char* pause_options[3] = {"Resume", "To Menu", "Exit"};
+                for (int i = 0; i < 3; i++)
+                {
+                    Color option_color = (pause_selected == i) ? RED : WHITE;
+                    DrawText(pause_options[i], screen_width/2 - MeasureText(pause_options[i], 50)/2, screen_height/2 + i * 60 - 40, 50, option_color);
+                }
+            }
+        
             if (game_over)
             {
-                Color fade_green = Fade(GREEN, win_alpha);
-                Color fade_white = Fade(WHITE, win_alpha);
+                Color fade_green = Fade(GREEN, win_alpha), fade_white = Fade(WHITE, win_alpha);
 
                 DrawText(TextFormat("%s WON!", winner.c_str()), screen_width/2 - 200, screen_height/2 - 40, 80, fade_green);
                 DrawText("Press SPACE to restart", screen_width/2 - 200, screen_height/2 + 60, 40, fade_white);
             }
-            else
-            {
-                DrawText("First to 25 wins!", screen_width/2 - MeasureText("First to 25 wins!", 40)/2, screen_height - 60, 40, RED);
-                if (paused)
-                {
-                    DrawText("PAUSED", screen_width/2 - MeasureText("PAUSED", 80)/2, screen_height/2 - 40, 80, BLUE);
-                }
-            }
+        }
+        else if (current_state == SETTINGS)
+        {
+            DrawText("---SETTINGS---", GetScreenWidth()/2 - MeasureText("---SETTINGS---", 50)/2, 100, 50, WHITE);
 
+            int bar_width = 400, bar_height = 30, bar_x = GetScreenWidth()/2 - bar_width/2, bar_y = 250;
+
+            DrawRectangle(bar_x, bar_y, bar_width, bar_height, GRAY);
+
+            DrawRectangle(bar_x, bar_y, (int)(bar_width * master_volume), bar_height, RED);
+            
+            // Volume
+            Color vol_color = RED;
+            DrawText(TextFormat("Volume: %i%%", (int)(master_volume * 100)),
+                GetScreenWidth()/2 - 200, 200, 40, vol_color);  // moved up to replace resolution's y-position
         }
         EndDrawing();
     }
