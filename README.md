@@ -12,7 +12,6 @@ A simple 2D Pong game made using **C++** and **Raylib**. This is my first game p
 - Score tracking and win conditions (first to 25)  
 - Start screen and win screen with fade animations  
 - Pause/resume functionality  (i tried using the trick from Godot worked kinda same i mean same logic)
-- Volume Setting Page 
 - Sound effects for:  
   - Ball hit  
   - Player/CPU scoring  
@@ -26,7 +25,8 @@ A simple 2D Pong game made using **C++** and **Raylib**. This is my first game p
 - **Player Paddle (Right):**  
   - Move up: `W` or `Up Arrow`  
   - Move down: `S` or `Down Arrow`  
-- **Pause/Resume:** `Escape`   
+- **Pause/Resume:** `P` or `Escape`  
+- **Start/Restart Game:** `Space`  
 
 ---
 
