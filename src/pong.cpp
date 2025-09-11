@@ -1,6 +1,5 @@
 #include <vector>
 #include <iostream>
-#include <fstream>
 #include <raylib.h>
 #include <cmath>
 #include <algorithm>
@@ -62,12 +61,13 @@ void drawParticles() {
 
 //Global Variables
 int playerScore = 0, playerAnimation = 0, cpuScore = 0, cpuAnimation = 0;
-int playerWins = 0, cpuWins = 0;
+int timerAnimation = 0, lastCountdownSecond = -1;
 bool gameStarted = false, gameOver = false, paused = false;
 string winner = "";
 float startAlpha = 0.0f, winAlpha = 0.0f;
 float timePassed = 0.0f, ballSpeedMultiplier = 1.0f, finalUpdateTime = 0.0f, timeTrialDuration = 45.0f;
 const float speedIncrement = 0.2f, maxBallSpeedMultiplier = 2.0f;
+const int TIMER_ANIM_FRAMES = 18;
 Sound ballHit, cpuScores, cpuWinsSound, playerScores, gameStart, playerWinsSound;
 
 //Game States
@@ -78,28 +78,6 @@ GameState currentState = MENU;
 float masterVolume = 1.0f;
 int selectedOption = 0, menuSelected = 0, pauseSelected = 0, modeSelected = 0;
 bool timeTrialMode = false;
-
-
-void saveStats() {
-    ofstream file("Stats.txt");
-    if (file.is_open()) {
-        file << playerWins << endl;
-        file << cpuWins << endl;
-        file.close();
-    }
-}
-
-void loadStats() {
-    ifstream file("Stats.txt");
-    if (file.is_open()) {
-        file >> playerWins;
-        file >> cpuWins;
-        file.close();
-    } else {
-        playerWins = 0;
-        cpuWins = 0;
-    }
-}
 
 class Ball {
 public:
@@ -126,8 +104,6 @@ public:
                 gameOver = true;
                 winner = "CPU";
                 PlaySound(cpuWinsSound);
-                cpuWins++;
-                saveStats();
             }
             resetBall();
         }
@@ -139,8 +115,6 @@ public:
                 gameOver = true;
                 winner = "Player";
                 PlaySound(playerWinsSound);
-                playerWins++;
-                saveStats();
             }
             resetBall();
         }
@@ -229,8 +203,6 @@ int main() {
     gameStart       = LoadSound("Audio/GameStart.mp3");
     playerWinsSound = LoadSound("Audio/PlayerWins.mp3");
 
-    loadStats();
-
     while (!WindowShouldClose()) {
         // Pause/Resume
         if (currentState == GAME && gameStarted && !gameOver && IsKeyPressed(KEY_ESCAPE)) {
@@ -261,13 +233,16 @@ int main() {
                 gameOver = false; paused = false;
                 winner = "";
                 startAlpha = 0.0f; finalUpdateTime = 0.0f;
+                timerAnimation = 0; lastCountdownSecond = -1;
                 ball.resetBall();
                 PlaySound(gameStart);
             }
         }
         else if (currentState == GAME) {
-            if (!gameOver) {
-                if (!paused) {
+            if (!gameOver) 
+            {
+                if (!paused) 
+                {
                     ball.update();
                     spawnBallTrail(ball.x, ball.y, ball.radius);
                     player.update();
@@ -300,11 +275,44 @@ int main() {
                     updateParticles();
 
                     // Time Trial Mode check
-                    if (timeTrialMode && timePassed >= timeTrialDuration) {
-                        gameOver = true;
-                        winner = (playerScore > cpuScore) ? "Player" : "CPU";
-                        PlaySound(cpuWinsSound);
+                    if (timeTrialMode) 
+                    {
+                        float remaining = timeTrialDuration - timePassed;
+                        if (remaining < 0) remaining = 0;
+                        int remSec = (int)ceil(remaining); // whole seconds remaining
+
+
+                        //final countdown animation
+                        if (remSec <= 10) 
+                        {
+                            if (remSec != lastCountdownSecond) 
+                            {
+                                timerAnimation = 18; // frames of animation
+                                lastCountdownSecond = remSec;
+                            }
+                        }
+
+                        if (timePassed >= timeTrialDuration) 
+                        {
+                            gameOver = true;
+                            if (playerScore > cpuScore) 
+                            {
+                                winner = "Player";
+                                PlaySound(playerWinsSound);
+                            }
+                            else if (cpuScore > playerScore) 
+                            {
+                                winner = "CPU";
+                                PlaySound(cpuWinsSound);
+                            }
+                            else
+                            {
+                                winner = "TIE";
+                                PlaySound(cpuWinsSound);
+                            }
+                        }
                     }
+                    if (timerAnimation > 0) timerAnimation--;
                 }
                 else {
                     if (IsKeyPressed(KEY_UP)) pauseSelected = (pauseSelected + 2) % 3;
@@ -395,10 +403,37 @@ int main() {
             drawParticles();
 
             // Timer
-            int minutes = (int)(timePassed / 60);
-            int seconds = (int)(timePassed) % 60;
-            string timer = TextFormat("%02i:%02i", minutes, seconds);
-            DrawText(timer.c_str(), screenWidth / 2 - MeasureText(timer.c_str(), 40) / 2, 10, 40, WHITE);
+            if (timeTrialMode)
+            {
+                float remaining = timeTrialDuration - timePassed;
+                if (remaining < 0) remaining = 0;
+                int remSec = (int)ceil(remaining); // whole seconds remaining
+
+                if (remSec <=10)
+                {
+                    float t = (float)timerAnimation / (float)TIMER_ANIM_FRAMES;
+                    if (t < 0) t = 0;
+                    int baseFont = 40;
+                    int extra = (int)round(20.0f * t); // max extra size
+                    int fontSize = baseFont + extra;
+                    string s = TextFormat("%i", remSec);
+                    DrawText(s.c_str(), screenWidth / 2 - MeasureText(s.c_str(), fontSize) / 2, 20, fontSize, RED);
+                }
+                else 
+                {
+                    int minutes = (int)(remaining / 60);
+                    int seconds = (int)ceil(remaining) % 60;
+                    string timer = TextFormat("%02i:%02i", minutes, seconds);
+                    DrawText(timer.c_str(), screenWidth / 2 - MeasureText(timer.c_str(), 40) / 2, 20, 40, WHITE);
+                }
+            }
+            else {
+                int minutes = (int)(timePassed / 60);
+                int seconds = (int)ceil(timePassed) % 60;
+                string timer = TextFormat("%02i:%02i", minutes, seconds);
+                DrawText(timer.c_str(), screenWidth / 2 - MeasureText(timer.c_str(), 40) / 2, 20, 40, WHITE);
+            }
+            
 
             // Scoreboard
             int cpuFontSize = (cpuAnimation > 0) ? 120 : 80;
@@ -418,7 +453,12 @@ int main() {
 
             if (gameOver) {
                 Color fadeGreen = Fade(GREEN, winAlpha), fadeWhite = Fade(WHITE, winAlpha);
-                DrawText(TextFormat("%s WON!", winner.c_str()), screenWidth / 2 - 200, screenHeight / 2 - 40, 80, fadeGreen);
+                if (winner == "TIE")
+                {
+                    DrawText("DRAW!", screenWidth / 2 - MeasureText("DRAW!", 80) / 2 , screenHeight / 2 - 40, 80, RED);
+                } else {
+                    DrawText(TextFormat("%s WON!", winner.c_str()), screenWidth / 2 - 200, screenHeight / 2 - 40, 80, fadeGreen);
+                }
                 DrawText("Press SPACE to restart", screenWidth / 2 - 200, screenHeight / 2 + 60, 40, fadeWhite);
             }
         }
